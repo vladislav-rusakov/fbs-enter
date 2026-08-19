@@ -1,0 +1,1194 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Сборка FBS · WB</title>
+<style>
+  :root{
+    --bg:#0F1216;
+    --panel:#171B21;
+    --panel-2:#1E232B;
+    --border:#2A303A;
+    --border-soft:#232933;
+    --text:#EAEDF1;
+    --muted:#8A93A3;
+    --muted-2:#5C6472;
+    --sticker:#22D3C4;
+    --sticker-dim:rgba(34,211,196,0.10);
+    --sticker-dim2:rgba(34,211,196,0.22);
+    --kiz:#B08CFF;
+    --kiz-dim:rgba(176,140,255,0.10);
+    --kiz-dim2:rgba(176,140,255,0.22);
+    --success:#4ADE80;
+    --success-dim:rgba(74,222,128,0.14);
+    --error:#FF5C5C;
+    --error-dim:rgba(255,92,92,0.14);
+    --warn:#FFB454;
+    --warn-dim:rgba(255,180,84,0.14);
+    --mono: ui-monospace, "JetBrains Mono", "SFMono-Regular", Menlo, Consolas, "Liberation Mono", monospace;
+    --sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+    --radius: 10px;
+  }
+  *{box-sizing:border-box;}
+  html,body{margin:0;padding:0;}
+  body{
+    background:var(--bg);
+    color:var(--text);
+    font-family:var(--sans);
+    min-height:100vh;
+    -webkit-font-smoothing:antialiased;
+  }
+  .wrap{
+    max-width:960px;
+    margin:0 auto;
+    padding:20px 16px 60px;
+  }
+
+  /* ---------- header ---------- */
+  header{
+    display:flex;
+    align-items:center;
+    justify-content:space-between;
+    gap:12px;
+    margin-bottom:18px;
+    flex-wrap:wrap;
+  }
+  .title{
+    display:flex;
+    align-items:baseline;
+    gap:10px;
+  }
+  .title h1{
+    font-size:18px;
+    font-weight:700;
+    margin:0;
+    letter-spacing:0.2px;
+  }
+  .title .sub{
+    font-size:12px;
+    color:var(--muted);
+    font-family:var(--mono);
+  }
+  .stats{
+    display:flex;
+    gap:8px;
+    flex-wrap:wrap;
+  }
+  .stat{
+    background:var(--panel);
+    border:1px solid var(--border);
+    border-radius:8px;
+    padding:6px 10px;
+    font-size:12px;
+    color:var(--muted);
+    display:flex;
+    gap:6px;
+    align-items:baseline;
+  }
+  .stat b{
+    color:var(--text);
+    font-family:var(--mono);
+    font-size:13px;
+  }
+  .stat.err b{color:var(--error);}
+  .stat.warn b{color:var(--warn);}
+  .iconbtn{
+    background:var(--panel);
+    border:1px solid var(--border);
+    color:var(--muted);
+    width:34px;height:34px;
+    border-radius:8px;
+    cursor:pointer;
+    font-size:15px;
+    display:flex;align-items:center;justify-content:center;
+    transition:border-color .15s, color .15s;
+  }
+  .iconbtn:hover{border-color:var(--border-soft);color:var(--text);}
+  .iconbtn.active{color:var(--sticker);border-color:var(--sticker);}
+
+  /* ---------- scan band ---------- */
+  .band{
+    position:relative;
+    overflow:hidden;
+    border-radius:14px;
+    border:1px solid var(--border);
+    padding:26px 24px 22px;
+    margin-bottom:14px;
+    background:var(--panel);
+    transition:border-color .25s, background .25s;
+  }
+  .band.state-sticker{
+    background:linear-gradient(180deg, var(--sticker-dim), var(--panel) 70%);
+    border-color:rgba(34,211,196,0.35);
+  }
+  .band.state-kiz{
+    background:linear-gradient(180deg, var(--kiz-dim), var(--panel) 70%);
+    border-color:rgba(176,140,255,0.35);
+  }
+  .band .scanline{
+    position:absolute;
+    left:0;right:0;top:0;
+    height:2px;
+    opacity:0.55;
+  }
+  .band.state-sticker .scanline{background:var(--sticker); box-shadow:0 0 12px var(--sticker); animation:sweep 2.6s linear infinite;}
+  .band.state-kiz .scanline{background:var(--kiz); box-shadow:0 0 12px var(--kiz); animation:sweep 2.6s linear infinite;}
+  @keyframes sweep{
+    0%{top:0; opacity:0;}
+    8%{opacity:.55;}
+    92%{opacity:.55;}
+    100%{top:100%; opacity:0;}
+  }
+  @media (prefers-reduced-motion: reduce){
+    .band .scanline{animation:none; display:none;}
+  }
+  .band-label{
+    font-family:var(--mono);
+    font-size:11px;
+    letter-spacing:1.5px;
+    color:var(--muted);
+    text-transform:uppercase;
+    margin-bottom:6px;
+  }
+  .band-title{
+    font-size:26px;
+    font-weight:700;
+    letter-spacing:0.3px;
+    margin-bottom:4px;
+  }
+  .state-sticker .band-title{color:var(--sticker);}
+  .state-kiz .band-title{color:var(--kiz);}
+  .band-pending{
+    font-family:var(--mono);
+    font-size:13px;
+    color:var(--muted);
+    margin-bottom:14px;
+  }
+  .band-pending b{color:var(--text); font-weight:500;}
+  #scanInput{
+    width:100%;
+    background:var(--panel-2);
+    border:1.5px solid var(--border-soft);
+    color:var(--text);
+    font-family:var(--mono);
+    font-size:17px;
+    padding:13px 14px;
+    border-radius:8px;
+    outline:none;
+    transition:border-color .15s, box-shadow .15s;
+  }
+  .state-sticker #scanInput:focus{border-color:var(--sticker); box-shadow:0 0 0 3px var(--sticker-dim2);}
+  .state-kiz #scanInput:focus{border-color:var(--kiz); box-shadow:0 0 0 3px var(--kiz-dim2);}
+  #scanInput::placeholder{color:var(--muted-2);}
+  .band-hint{
+    font-size:12px;
+    color:var(--muted);
+    margin-top:10px;
+  }
+
+  .band.flash-success{animation:flashSuccess .5s ease;}
+  .band.flash-error{animation:flashError .45s ease;}
+  .band.flash-warn{animation:flashWarn .5s ease;}
+  @keyframes flashSuccess{
+    0%{box-shadow:0 0 0 0 var(--success-dim);}
+    30%{box-shadow:0 0 0 8px var(--success-dim);}
+    100%{box-shadow:0 0 0 0 rgba(0,0,0,0);}
+  }
+  @keyframes flashError{
+    0%,100%{transform:translateX(0);}
+    20%{transform:translateX(-6px);}
+    40%{transform:translateX(6px);}
+    60%{transform:translateX(-4px);}
+    80%{transform:translateX(4px);}
+  }
+  @keyframes flashWarn{
+    0%{box-shadow:0 0 0 0 var(--warn-dim);}
+    30%{box-shadow:0 0 0 8px var(--warn-dim);}
+    100%{box-shadow:0 0 0 0 rgba(0,0,0,0);}
+  }
+  @media (prefers-reduced-motion: reduce){
+    .band.flash-error{animation:none;}
+  }
+
+  /* ---------- banner ---------- */
+  .banner{
+    display:none;
+    align-items:flex-start;
+    gap:12px;
+    padding:14px 16px;
+    border-radius:10px;
+    margin-bottom:14px;
+    border:1px solid;
+    font-size:14px;
+    line-height:1.5;
+  }
+  .banner.show{display:flex;}
+  .banner.error{background:var(--error-dim); border-color:rgba(255,92,92,0.4); color:#FFD1D1;}
+  .banner.warn{background:var(--warn-dim); border-color:rgba(255,180,84,0.4); color:#FFE3C0;}
+  .banner.success{background:var(--success-dim); border-color:rgba(74,222,128,0.4); color:#CFF7DA;}
+  .banner .bico{font-family:var(--mono); font-weight:700; font-size:16px; line-height:1;}
+  .banner .btext{flex:1;}
+  .banner .btext b{display:block; margin-bottom:2px; font-size:14px;}
+  .banner .btext span{color:inherit; opacity:0.85; font-size:13px;}
+  .banner button{
+    background:transparent;
+    border:1px solid currentColor;
+    color:inherit;
+    padding:6px 10px;
+    border-radius:6px;
+    font-size:12px;
+    cursor:pointer;
+    white-space:nowrap;
+    opacity:0.9;
+  }
+  .banner button:hover{opacity:1;}
+
+  /* ---------- settings ---------- */
+  .settings{
+    display:none;
+    background:var(--panel);
+    border:1px solid var(--border);
+    border-radius:10px;
+    padding:16px;
+    margin-bottom:14px;
+    font-size:13px;
+  }
+  .settings.show{display:block;}
+  .settings h3{margin:0 0 12px; font-size:13px; color:var(--muted); font-weight:700; text-transform:uppercase; letter-spacing:0.5px;}
+  .srow{display:flex; align-items:center; justify-content:space-between; gap:12px; padding:8px 0; border-bottom:1px solid var(--border-soft);}
+  .srow:last-child{border-bottom:none;}
+  .srow .slabel{color:var(--text);}
+  .srow .sdesc{color:var(--muted); font-size:12px; margin-top:2px;}
+  .srow input[type=number]{
+    width:70px; background:var(--panel-2); border:1px solid var(--border-soft); color:var(--text);
+    padding:6px 8px; border-radius:6px; font-family:var(--mono); text-align:center;
+  }
+  .switch{
+    width:38px; height:22px; background:var(--panel-2); border:1px solid var(--border-soft);
+    border-radius:20px; position:relative; cursor:pointer; flex-shrink:0;
+  }
+  .switch .knob{
+    position:absolute; top:2px; left:2px; width:16px; height:16px; border-radius:50%;
+    background:var(--muted); transition:left .15s, background .15s;
+  }
+  .switch.on{background:rgba(34,211,196,0.18); border-color:var(--sticker);}
+  .switch.on .knob{left:18px; background:var(--sticker);}
+  .btn-small{
+    background:var(--panel-2); border:1px solid var(--border-soft); color:var(--text);
+    padding:6px 12px; border-radius:6px; font-size:12px; cursor:pointer;
+  }
+  .btn-small:hover{border-color:var(--muted);}
+
+  /* ---------- table ---------- */
+  .table-wrap{
+    background:var(--panel);
+    border:1px solid var(--border);
+    border-radius:10px;
+    overflow:hidden;
+    margin-bottom:14px;
+  }
+  .table-scroll{overflow-x:auto;}
+  table{
+    width:100%;
+    border-collapse:collapse;
+    font-size:13px;
+  }
+  thead th{
+    text-align:left;
+    font-size:11px;
+    text-transform:uppercase;
+    letter-spacing:0.5px;
+    color:var(--muted);
+    padding:10px 14px;
+    border-bottom:1px solid var(--border);
+    white-space:nowrap;
+    background:var(--panel-2);
+  }
+  tbody td{
+    padding:10px 14px;
+    border-bottom:1px solid var(--border-soft);
+    font-family:var(--mono);
+    font-size:12.5px;
+    vertical-align:middle;
+    white-space:nowrap;
+  }
+  tbody tr:last-child td{border-bottom:none;}
+  tbody tr:hover{background:rgba(255,255,255,0.02);}
+  td.num{color:var(--muted); font-variant-numeric:tabular-nums; width:36px;}
+  td.pending-cell{color:var(--muted-2); font-style:italic;}
+  .dot{
+    display:inline-block; width:6px; height:6px; border-radius:50%;
+    background:var(--kiz); margin-right:7px; animation:pulseDot 1.1s ease-in-out infinite;
+  }
+  @keyframes pulseDot{0%,100%{opacity:0.35;}50%{opacity:1;}}
+  .del-btn{
+    background:transparent; border:none; color:var(--muted-2); cursor:pointer;
+    font-size:14px; padding:2px 6px; border-radius:4px;
+  }
+  .del-btn:hover{color:var(--error); background:var(--error-dim);}
+  .empty-row td{
+    text-align:center; color:var(--muted); font-family:var(--sans); padding:26px 14px; font-style:normal;
+  }
+
+  /* ---------- template box ---------- */
+  .template-box{
+    display:flex;
+    align-items:center;
+    justify-content:space-between;
+    gap:14px;
+    flex-wrap:wrap;
+    background:var(--panel);
+    border:1px solid var(--border);
+    border-radius:10px;
+    padding:14px 16px;
+    margin-bottom:14px;
+  }
+  .template-text b{display:block; font-size:13.5px; margin-bottom:2px;}
+  .template-text span{display:block; font-size:12px; color:var(--muted); max-width:520px; line-height:1.4;}
+
+  /* ---------- toolbar ---------- */
+  .toolbar{
+    display:flex;
+    gap:8px;
+    flex-wrap:wrap;
+  }
+  .tbtn{
+    background:var(--panel);
+    border:1px solid var(--border);
+    color:var(--text);
+    padding:9px 14px;
+    border-radius:8px;
+    font-size:13px;
+    cursor:pointer;
+    display:flex;
+    align-items:center;
+    gap:7px;
+    transition:border-color .15s;
+  }
+  .tbtn:hover{border-color:var(--muted);}
+  .tbtn.danger{color:#FFB4B4;}
+  .tbtn.danger:hover{border-color:var(--error);}
+  .tbtn:disabled{opacity:0.4; cursor:not-allowed;}
+  .tbtn:disabled:hover{border-color:var(--border);}
+
+  .footnote{
+    margin-top:18px;
+    font-size:11.5px;
+    color:var(--muted-2);
+    text-align:center;
+    font-family:var(--mono);
+  }
+
+  @media (max-width:560px){
+    .band-title{font-size:20px;}
+    .stats{gap:6px;}
+    .stat{padding:5px 8px; font-size:11px;}
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <header>
+    <div class="title">
+      <h1>Сборка FBS</h1>
+      <span class="sub">wildberries · стикер → киз</span>
+    </div>
+    <div style="display:flex; align-items:center; gap:8px;">
+      <div class="stats">
+        <div class="stat"><span>пар</span><b id="statPairs">0</b></div>
+        <div class="stat warn"><span>дублей</span><b id="statDup">0</b></div>
+        <div class="stat err"><span>ошибок</span><b id="statErr">0</b></div>
+      </div>
+      <button class="iconbtn" id="soundBtn" title="Звук">♪</button>
+      <button class="iconbtn" id="settingsBtn" title="Настройки">⚙</button>
+    </div>
+  </header>
+
+  <div class="settings" id="settingsPanel">
+    <h3>Настройки распознавания</h3>
+    <div class="srow">
+      <div>
+        <div class="slabel">Определение стикера</div>
+        <div class="sdesc">Стикер WB всегда начинается с «*» — это единственный и обязательный признак.</div>
+      </div>
+    </div>
+    <div class="srow">
+      <div>
+        <div class="slabel">Проверять формат КИЗ (01…)</div>
+        <div class="sdesc">Код маркировки «Честный знак» начинается с (01) + GTIN (14 цифр). Если код не соответствует формату — сканирование отклоняется.</div>
+      </div>
+      <div class="switch on" id="gs1Switch"><div class="knob"></div></div>
+    </div>
+    <div class="srow">
+      <div>
+        <div class="slabel">Звук и голос</div>
+        <div class="sdesc">Тон и голосовое оповещение при ошибке, дубле и успешном скане</div>
+      </div>
+      <div class="switch on" id="soundSwitch"><div class="knob"></div></div>
+    </div>
+    <div class="srow">
+      <div>
+        <div class="slabel">Проверка звука</div>
+        <div class="sdesc">Проверьте, что сигналы слышны в вашей среде</div>
+      </div>
+      <div style="display:flex; gap:6px;">
+        <button class="btn-small" id="testSuccess">успех</button>
+        <button class="btn-small" id="testWarn">дубль</button>
+        <button class="btn-small" id="testError">ошибка</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="band state-sticker" id="band">
+    <div class="scanline"></div>
+    <div class="band-label" id="bandStep">Шаг 1 из 2</div>
+    <div class="band-title" id="bandTitle">Сканируйте стикер WB</div>
+    <div class="band-pending" id="bandPending" style="display:none;"></div>
+    <input id="scanInput" type="text" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" placeholder="Готово к сканированию…">
+    <div class="band-hint" id="bandHint">Порядок: сначала стикер WB, затем код маркировки (КИЗ) товара. Повторяйте для каждой позиции.</div>
+  </div>
+
+  <div class="banner" id="banner">
+    <div class="bico" id="bannerIco">!</div>
+    <div class="btext">
+      <b id="bannerTitle"></b>
+      <span id="bannerText"></span>
+    </div>
+    <button id="bannerAction" style="display:none;"></button>
+  </div>
+
+  <div class="table-wrap">
+    <div class="table-scroll">
+      <table>
+        <thead>
+          <tr>
+            <th style="width:36px;">№</th>
+            <th>Стикер WB</th>
+            <th>КИЗ (код маркировки)</th>
+            <th style="width:36px;"></th>
+          </tr>
+        </thead>
+        <tbody id="tbody">
+          <tr class="empty-row"><td colspan="4">Список пуст — отсканируйте первый стикер</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <div class="template-box" id="templateBox">
+    <div class="template-text">
+      <b>Шаблон сборочного задания WB</b>
+      <span>Загрузите пустой файл шаблона (.xlsx) — КИЗ подставятся в колонку «КИЗ» по совпадению колонки «Стикер», и готовый файл сразу скачается.</span>
+    </div>
+    <button class="tbtn" id="btnFillTemplate">Загрузить шаблон и заполнить</button>
+    <input type="file" id="templateFileInput" accept=".xlsx" style="display:none;">
+  </div>
+
+  <div class="toolbar">
+    <button class="tbtn" id="btnExportXlsx">Экспорт Excel</button>
+    <button class="tbtn" id="btnExportCsv">Экспорт CSV</button>
+    <button class="tbtn" id="btnCopy">Копировать таблицу</button>
+    <button class="tbtn" id="btnUndo">Отменить последнее</button>
+    <button class="tbtn danger" id="btnClear">Очистить всё</button>
+  </div>
+
+  <div class="footnote">данные сохраняются автоматически в этом браузере</div>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<script>
+(function(){
+  "use strict";
+
+  var STORAGE_KEY = "fbs_scan_session_v1";
+
+  var state = {
+    rows: [],
+    stickerSet: {},
+    kizSet: {},
+    expecting: "STICKER",
+    stats: { errors: 0, duplicates: 0 },
+    settings: { soundEnabled: true, checkGS1: true },
+    nextId: 1
+  };
+
+  var el = {
+    band: document.getElementById("band"),
+    bandStep: document.getElementById("bandStep"),
+    bandTitle: document.getElementById("bandTitle"),
+    bandPending: document.getElementById("bandPending"),
+    bandHint: document.getElementById("bandHint"),
+    scanInput: document.getElementById("scanInput"),
+    banner: document.getElementById("banner"),
+    bannerIco: document.getElementById("bannerIco"),
+    bannerTitle: document.getElementById("bannerTitle"),
+    bannerText: document.getElementById("bannerText"),
+    bannerAction: document.getElementById("bannerAction"),
+    tbody: document.getElementById("tbody"),
+    statPairs: document.getElementById("statPairs"),
+    statDup: document.getElementById("statDup"),
+    statErr: document.getElementById("statErr"),
+    settingsPanel: document.getElementById("settingsPanel"),
+    settingsBtn: document.getElementById("settingsBtn"),
+    soundBtn: document.getElementById("soundBtn"),
+    gs1Switch: document.getElementById("gs1Switch"),
+    soundSwitch: document.getElementById("soundSwitch"),
+    testSuccess: document.getElementById("testSuccess"),
+    testWarn: document.getElementById("testWarn"),
+    testError: document.getElementById("testError")
+  };
+
+  var bannerTimer = null;
+
+  /* ---------------- storage ---------------- */
+  function saveState(){
+    try{
+      var payload = JSON.stringify({
+        rows: state.rows,
+        stickerSet: Object.keys(state.stickerSet),
+        kizSet: Object.keys(state.kizSet),
+        expecting: state.expecting,
+        stats: state.stats,
+        settings: state.settings,
+        nextId: state.nextId
+      });
+      if(window.storage && window.storage.set){
+        window.storage.set(STORAGE_KEY, payload, false).catch(function(){});
+      }
+    }catch(e){}
+  }
+
+  function loadState(cb){
+    if(!window.storage || !window.storage.get){ cb(); return; }
+    window.storage.get(STORAGE_KEY, false).then(function(res){
+      if(res && res.value){
+        try{
+          var data = JSON.parse(res.value);
+          state.rows = data.rows || [];
+          state.stickerSet = {};
+          (data.stickerSet||[]).forEach(function(k){ state.stickerSet[k]=true; });
+          state.kizSet = {};
+          (data.kizSet||[]).forEach(function(k){ state.kizSet[k]=true; });
+          state.expecting = data.expecting || "STICKER";
+          state.stats = data.stats || { errors:0, duplicates:0 };
+          state.settings = Object.assign(state.settings, data.settings || {});
+          state.nextId = data.nextId || (state.rows.length+1);
+        }catch(e){}
+      }
+      cb();
+    }).catch(function(){ cb(); });
+  }
+
+  /* ---------------- classification ---------------- */
+  /* Стикер WB всегда начинается с "*" — это единственный надёжный признак.
+     Код маркировки "Честный знак" (КИЗ) по стандарту GS1 начинается с
+     application identifier (01) + 14-значный GTIN. Если код не подходит
+     ни под один из форматов — это, скорее всего, случайно отсканированный
+     посторонний код, и его нужно отклонить. */
+  function classify(raw){
+    var code = raw.trim();
+    if(!code) return "EMPTY";
+    if(code.charAt(0) === "*") return "STICKER";
+    if(state.settings.checkGS1){
+      return /^01\d{14}/.test(code) ? "KIZ" : "OTHER";
+    }
+    return "KIZ";
+  }
+
+  /* ---------------- декомпрессия стикера ----------------
+     Сжатый код стикера — это Base64 от байтового представления исходного
+     десятичного номера с одним служебным байтом в конце (вероятно,
+     контрольная сумма). Схема выведена из примера "*DT3G6uWC" -> "56871021285"
+     и подтверждена вручную — при большом числе стикеров рекомендуется
+     дополнительно сверить результат. */
+  function decodeStickerCode(raw){
+    var s = raw.trim();
+    if(s.charAt(0) === "*") s = s.slice(1);
+    if(!s) return null;
+    s = s.replace(/-/g,"+").replace(/_/g,"/");
+    while(s.length % 4 !== 0){ s += "="; }
+    try{
+      var binary = atob(s);
+      if(binary.length < 2) return null;
+      var bytes = [];
+      for(var i=0;i<binary.length-1;i++){ bytes.push(binary.charCodeAt(i)); }
+      var val = 0n;
+      for(var j=0;j<bytes.length;j++){ val = (val << 8n) | BigInt(bytes[j]); }
+      var result = val.toString();
+      return result === "0" ? null : result;
+    }catch(e){
+      return null;
+    }
+  }
+
+  /* ---------------- audio ---------------- */
+  var audioCtx = null;
+  function ensureAudio(){
+    if(!audioCtx){
+      try{
+        var AC = window.AudioContext || window.webkitAudioContext;
+        audioCtx = new AC();
+      }catch(e){}
+    }
+    if(audioCtx && audioCtx.state === "suspended"){
+      audioCtx.resume().catch(function(){});
+    }
+  }
+  function tone(freq, start, dur, type, gainVal){
+    if(!audioCtx) return;
+    var osc = audioCtx.createOscillator();
+    var gain = audioCtx.createGain();
+    osc.type = type;
+    osc.frequency.value = freq;
+    gain.gain.setValueAtTime(0.0001, start);
+    gain.gain.exponentialRampToValueAtTime(gainVal, start+0.01);
+    gain.gain.exponentialRampToValueAtTime(0.0001, start+dur);
+    osc.connect(gain).connect(audioCtx.destination);
+    osc.start(start);
+    osc.stop(start+dur+0.02);
+  }
+  function beep(kind){
+    if(!state.settings.soundEnabled) return;
+    ensureAudio();
+    if(!audioCtx) return;
+    var now = audioCtx.currentTime;
+    if(kind === "success"){
+      tone(1180, now, 0.07, "sine", 0.16);
+    } else if(kind === "error"){
+      tone(220, now, 0.15, "square", 0.2);
+      tone(180, now+0.17, 0.15, "square", 0.2);
+    } else if(kind === "warn"){
+      tone(520, now, 0.09, "triangle", 0.16);
+      tone(520, now+0.13, 0.09, "triangle", 0.16);
+    }
+  }
+
+  function speak(text){
+    if(!state.settings.soundEnabled) return;
+    if(!("speechSynthesis" in window)) return;
+    try{
+      window.speechSynthesis.cancel();
+      var utter = new SpeechSynthesisUtterance(text);
+      utter.lang = "ru-RU";
+      utter.rate = 1;
+      utter.pitch = 1;
+      window.speechSynthesis.speak(utter);
+    }catch(e){}
+  }
+
+  /* ---------------- rendering ---------------- */
+  function render(){
+    var pendingRow = state.rows.length && state.rows[state.rows.length-1].kiz === null
+      ? state.rows[state.rows.length-1] : null;
+
+    if(state.expecting === "STICKER"){
+      el.band.className = "band state-sticker";
+      el.bandStep.textContent = "Шаг 1 из 2";
+      el.bandTitle.textContent = "Сканируйте стикер WB";
+      el.bandPending.style.display = "none";
+      el.scanInput.placeholder = "Готово к сканированию стикера (начинается с «*»)…";
+      el.bandHint.textContent = "Порядок: сначала стикер WB (начинается с «*»), затем код маркировки (КИЗ) товара. Повторяйте для каждой позиции.";
+    } else {
+      el.band.className = "band state-kiz";
+      el.bandStep.textContent = "Шаг 2 из 2";
+      el.bandTitle.textContent = "Сканируйте КИЗ";
+      el.bandPending.style.display = "block";
+      el.bandPending.innerHTML = "Стикер: <b>" + escapeHtml(pendingRow ? pendingRow.sticker : "") + "</b>";
+      el.scanInput.placeholder = "Готово к сканированию кода маркировки…";
+      el.bandHint.textContent = "Отсканируйте код маркировки (КИЗ) для этого товара, чтобы завершить пару.";
+    }
+
+    if(state.rows.length === 0){
+      el.tbody.innerHTML = '<tr class="empty-row"><td colspan="4">Список пуст — отсканируйте первый стикер</td></tr>';
+    } else {
+      var html = "";
+      for(var i=0;i<state.rows.length;i++){
+        var r = state.rows[i];
+        html += '<tr data-id="'+r.id+'">';
+        html += '<td class="num">'+(i+1)+'</td>';
+        html += '<td>'+escapeHtml(r.sticker)+(r.stickerDecodeFailed ? ' <span style="color:var(--warn);" title="Не удалось расшифровать код, показан код как есть">⚠</span>' : '')+'</td>';
+        if(r.kiz === null){
+          html += '<td class="pending-cell"><span class="dot"></span>сканируйте КИЗ</td>';
+        } else {
+          html += '<td>'+escapeHtml(r.kiz)+'</td>';
+        }
+        html += '<td><button class="del-btn" data-del="'+r.id+'" title="Удалить">✕</button></td>';
+        html += '</tr>';
+      }
+      el.tbody.innerHTML = html;
+    }
+
+    var completed = state.rows.filter(function(r){ return r.kiz !== null; }).length;
+    el.statPairs.textContent = completed;
+    el.statDup.textContent = state.stats.duplicates;
+    el.statErr.textContent = state.stats.errors;
+
+    var hasCompleted = completed > 0;
+    document.getElementById("btnExportXlsx").disabled = !hasCompleted;
+    document.getElementById("btnExportCsv").disabled = !hasCompleted;
+    document.getElementById("btnCopy").disabled = !hasCompleted;
+    document.getElementById("btnFillTemplate").disabled = !hasCompleted;
+    document.getElementById("btnUndo").disabled = state.rows.length === 0;
+    document.getElementById("btnClear").disabled = state.rows.length === 0;
+  }
+
+  function escapeHtml(s){
+    return String(s).replace(/[&<>"']/g, function(c){
+      return {"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c];
+    });
+  }
+
+  /* ---------------- banner ---------------- */
+  function showBanner(kind, title, text, actionLabel, actionFn){
+    clearTimeout(bannerTimer);
+    el.banner.className = "banner show " + kind;
+    el.bannerIco.textContent = kind === "error" ? "✕" : (kind === "success" ? "✓" : "!");
+    el.bannerTitle.textContent = title;
+    el.bannerText.textContent = text;
+    if(actionLabel && actionFn){
+      el.bannerAction.style.display = "inline-block";
+      el.bannerAction.textContent = actionLabel;
+      el.bannerAction.onclick = function(){
+        hideBanner();
+        actionFn();
+      };
+    } else {
+      el.bannerAction.style.display = "none";
+      el.bannerAction.onclick = null;
+    }
+    bannerTimer = setTimeout(hideBanner, 5000);
+  }
+  function hideBanner(){
+    el.banner.className = "banner";
+    clearTimeout(bannerTimer);
+  }
+
+  function flashBand(kind){
+    el.band.classList.remove("flash-success","flash-error","flash-warn");
+    void el.band.offsetWidth;
+    el.band.classList.add("flash-"+kind);
+    setTimeout(function(){ el.band.classList.remove("flash-"+kind); }, 600);
+  }
+
+  /* ---------------- scan handling ---------------- */
+  function handleScan(raw){
+    var code = raw.trim();
+    if(!code) return;
+    hideBanner();
+    var type = classify(code);
+
+    if(state.expecting === "STICKER"){
+      if(type !== "STICKER"){
+        state.stats.errors++;
+        flashBand("error");
+        beep("error");
+        speak("Отсканирован неправильный код.");
+        showBanner("error", "Это не стикер WB",
+          "Стикер WB всегда начинается с «*». Отсканирован код другого типа. Если это ошибка распознавания — примите его принудительно.",
+          "Всё равно принять как стикер", function(){ acceptSticker(code); });
+        render();
+        return;
+      }
+      if(state.stickerSet[code]){
+        state.stats.duplicates++;
+        flashBand("warn");
+        beep("warn");
+        speak("Код отсканирован дважды.");
+        showBanner("warn", "Этот стикер уже отсканирован",
+          "Стикер уже есть в таблице. Повторное сканирование отклонено.",
+          "Всё равно добавить", function(){ acceptSticker(code); });
+        render();
+        return;
+      }
+      acceptSticker(code);
+    } else {
+      if(type === "STICKER"){
+        state.stats.errors++;
+        flashBand("error");
+        beep("error");
+        speak("Отсканирован неправильный код.");
+        showBanner("error", "Это стикер WB, а не КИЗ",
+          "Отсканирован код, начинающийся с «*» — это стикер. Ожидается код маркировки (КИЗ) для текущего товара.",
+          "Всё равно принять как КИЗ", function(){ acceptKiz(code); });
+        render();
+        return;
+      }
+      if(type === "OTHER"){
+        state.stats.errors++;
+        flashBand("error");
+        beep("error");
+        speak("Отсканирован неправильный код.");
+        showBanner("error", "Код не похож на КИЗ",
+          "Код маркировки «Честный знак» должен начинаться с (01) и 14-значного GTIN. Отсканированный код не соответствует формату — возможно, это посторонний код.",
+          "Всё равно принять как КИЗ", function(){ acceptKiz(code); });
+        render();
+        return;
+      }
+      if(state.kizSet[code]){
+        state.stats.duplicates++;
+        flashBand("warn");
+        beep("warn");
+        speak("Код отсканирован дважды.");
+        showBanner("warn", "Этот КИЗ уже использован",
+          "Код маркировки уже есть в таблице. Повторное сканирование отклонено.",
+          "Всё равно добавить", function(){ acceptKiz(code); });
+        render();
+        return;
+      }
+      acceptKiz(code);
+    }
+  }
+
+  function acceptSticker(code){
+    var decoded = decodeStickerCode(code);
+    var row = {
+      id: state.nextId++,
+      sticker: decoded || code,
+      stickerRaw: code,
+      stickerDecodeFailed: !decoded,
+      kiz: null
+    };
+    state.rows.push(row);
+    state.stickerSet[code] = true;
+    state.expecting = "KIZ";
+    flashBand("success");
+    beep("success");
+    saveState();
+    render();
+  }
+
+  function acceptKiz(code){
+    var pending = state.rows.length ? state.rows[state.rows.length-1] : null;
+    if(!pending || pending.kiz !== null){
+      return;
+    }
+    pending.kiz = code;
+    state.kizSet[code] = true;
+    state.expecting = "STICKER";
+    flashBand("success");
+    beep("success");
+    saveState();
+    render();
+  }
+
+  /* ---------------- row deletion / undo ---------------- */
+  function deleteRow(id){
+    var idx = state.rows.findIndex(function(r){ return r.id === id; });
+    if(idx === -1) return;
+    var row = state.rows[idx];
+    if(row.sticker) delete state.stickerSet[row.sticker];
+    if(row.kiz) delete state.kizSet[row.kiz];
+    state.rows.splice(idx,1);
+    if(row.kiz === null){
+      state.expecting = "STICKER";
+    }
+    saveState();
+    render();
+  }
+
+  function undoLast(){
+    if(state.rows.length === 0) return;
+    var last = state.rows[state.rows.length-1];
+    deleteRow(last.id);
+  }
+
+  function clearAll(){
+    if(state.rows.length === 0) return;
+    if(!window.confirm("Удалить все "+state.rows.length+" строк? Это действие нельзя отменить.")) return;
+    state.rows = [];
+    state.stickerSet = {};
+    state.kizSet = {};
+    state.expecting = "STICKER";
+    state.stats = { errors:0, duplicates:0 };
+    saveState();
+    render();
+  }
+
+  /* ---------------- шаблон Excel WB ---------------- */
+  function findHeaderInfo(ws){
+    if(!ws || !ws["!ref"]) return null;
+    var range = XLSX.utils.decode_range(ws["!ref"]);
+    var lastHeaderRow = Math.min(range.s.r + 9, range.e.r);
+    for(var r = range.s.r; r <= lastHeaderRow; r++){
+      var stickerCol = null, kizCol = null;
+      for(var c = range.s.c; c <= range.e.c; c++){
+        var cell = ws[XLSX.utils.encode_cell({r:r, c:c})];
+        if(!cell || cell.v === undefined || cell.v === null) continue;
+        var text = String(cell.v).trim().toLowerCase();
+        if(text === "стикер") stickerCol = c;
+        if(text === "киз") kizCol = c;
+      }
+      if(stickerCol !== null && kizCol !== null){
+        return { headerRow: r, stickerCol: stickerCol, kizCol: kizCol };
+      }
+    }
+    return null;
+  }
+
+  function fillTemplateWorkbook(workbook){
+    var completed = state.rows.filter(function(r){ return r.kiz !== null; });
+    if(completed.length === 0){
+      return { ok:false, message:"Нет ни одной завершённой пары «стикер — КИЗ». Сначала отсканируйте позиции." };
+    }
+    var map = {};
+    completed.forEach(function(r){ map[String(r.sticker)] = r.kiz; });
+
+    var sheetName = null, headerInfo = null;
+    for(var i=0;i<workbook.SheetNames.length;i++){
+      var name = workbook.SheetNames[i];
+      var info = findHeaderInfo(workbook.Sheets[name]);
+      if(info){ sheetName = name; headerInfo = info; break; }
+    }
+    if(!headerInfo){
+      return { ok:false, message:"В файле не найдены колонки «Стикер» и «КИЗ». Проверьте, что это шаблон сборочного задания Wildberries." };
+    }
+
+    var ws = workbook.Sheets[sheetName];
+    var range = XLSX.utils.decode_range(ws["!ref"]);
+    var matched = 0, totalRows = 0;
+    var usedKeys = {};
+    var unmatchedCount = 0;
+
+    for(var r = headerInfo.headerRow + 1; r <= range.e.r; r++){
+      var stAddr = XLSX.utils.encode_cell({r:r, c:headerInfo.stickerCol});
+      var stCell = ws[stAddr];
+      if(!stCell || stCell.v === undefined || stCell.v === null || String(stCell.v).trim() === "") continue;
+      totalRows++;
+      var key = String(stCell.v).trim();
+      if(map.hasOwnProperty(key)){
+        var kizAddr = XLSX.utils.encode_cell({r:r, c:headerInfo.kizCol});
+        var existing = ws[kizAddr] || {};
+        var updated = {};
+        for(var k in existing){ updated[k] = existing[k]; }
+        updated.t = "s";
+        updated.v = map[key];
+        delete updated.w;
+        delete updated.f;
+        ws[kizAddr] = updated;
+        matched++;
+        usedKeys[key] = true;
+      } else {
+        unmatchedCount++;
+      }
+    }
+
+    var unusedCount = completed.filter(function(r){ return !usedKeys[String(r.sticker)]; }).length;
+
+    return { ok:true, matched:matched, totalRows:totalRows, unmatchedCount:unmatchedCount, unusedCount:unusedCount };
+  }
+
+  function processTemplateFile(file){
+    var reader = new FileReader();
+    reader.onload = function(ev){
+      var workbook;
+      try{
+        var data = new Uint8Array(ev.target.result);
+        workbook = XLSX.read(data, { type:"array", cellStyles:true });
+      }catch(e){
+        showBanner("error", "Не удалось прочитать файл", "Убедитесь, что выбран корректный файл .xlsx.");
+        beep("error");
+        return;
+      }
+      var result = fillTemplateWorkbook(workbook);
+      if(!result.ok){
+        showBanner("error", "Не удалось заполнить шаблон", result.message);
+        beep("error");
+        return;
+      }
+      var wbout;
+      try{
+        wbout = XLSX.write(workbook, { bookType:"xlsx", type:"array", cellStyles:true });
+      }catch(e){
+        showBanner("error", "Ошибка при формировании файла", "Не удалось сохранить заполненный файл.");
+        beep("error");
+        return;
+      }
+      var blob = new Blob([wbout], { type:"application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" });
+      var a = document.createElement("a");
+      var baseName = file.name.replace(/\.xlsx$/i, "");
+      a.href = URL.createObjectURL(blob);
+      a.download = baseName + "-заполнено.xlsx";
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+
+      var msg = "Подставлено КИЗ в " + result.matched + " из " + result.totalRows + " строк шаблона.";
+      var hasIssues = result.unmatchedCount > 0 || result.unusedCount > 0;
+      if(result.unmatchedCount > 0){
+        msg += " Для " + result.unmatchedCount + " стикеров из шаблона совпадений не найдено.";
+      }
+      if(result.unusedCount > 0){
+        msg += " " + result.unusedCount + " отсканированных пар не подошли ни к одной строке шаблона.";
+      }
+      showBanner(hasIssues ? "warn" : "success", hasIssues ? "Файл заполнен частично" : "Шаблон заполнен и скачан", msg);
+      if(hasIssues) beep("warn");
+    };
+    reader.onerror = function(){
+      showBanner("error", "Не удалось прочитать файл", "Попробуйте выбрать файл ещё раз.");
+      beep("error");
+    };
+    reader.readAsArrayBuffer(file);
+  }
+
+  /* ---------------- export ---------------- */
+  function completedPairs(){
+    return state.rows.filter(function(r){ return r.kiz !== null; })
+      .map(function(r){ return [r.sticker, r.kiz]; });
+  }
+
+  function exportXlsx(){
+    var pairs = completedPairs();
+    if(!pairs.length) return;
+    var data = [["Стикер WB","КИЗ"]].concat(pairs);
+    var ws = XLSX.utils.aoa_to_sheet(data);
+    ws["!cols"] = [{wch:22},{wch:50}];
+    var wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, "КИЗ");
+    var ts = new Date().toISOString().slice(0,19).replace(/[:T]/g,"-");
+    XLSX.writeFile(wb, "fbs-kiz-"+ts+".xlsx");
+  }
+
+  function exportCsv(){
+    var pairs = completedPairs();
+    if(!pairs.length) return;
+    var lines = ["Стикер WB;КИЗ"];
+    pairs.forEach(function(p){ lines.push(p[0]+";"+p[1]); });
+    var csv = "\uFEFF" + lines.join("\r\n");
+    var blob = new Blob([csv], {type:"text/csv;charset=utf-8;"});
+    var a = document.createElement("a");
+    var ts = new Date().toISOString().slice(0,19).replace(/[:T]/g,"-");
+    a.href = URL.createObjectURL(blob);
+    a.download = "fbs-kiz-"+ts+".csv";
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+  }
+
+  function copyTable(){
+    var pairs = completedPairs();
+    if(!pairs.length) return;
+    var tsv = pairs.map(function(p){ return p[0]+"\t"+p[1]; }).join("\n");
+    if(navigator.clipboard && navigator.clipboard.writeText){
+      navigator.clipboard.writeText(tsv).then(function(){
+        showBanner("warn","Скопировано",pairs.length+" строк в буфере обмена — вставьте в Excel или Google Таблицы.");
+        el.banner.className = "banner show warn";
+      }).catch(function(){
+        fallbackCopy(tsv);
+      });
+    } else {
+      fallbackCopy(tsv);
+    }
+  }
+  function fallbackCopy(text){
+    var ta = document.createElement("textarea");
+    ta.value = text;
+    ta.style.position = "fixed";
+    ta.style.opacity = "0";
+    document.body.appendChild(ta);
+    ta.select();
+    try{ document.execCommand("copy"); }catch(e){}
+    document.body.removeChild(ta);
+  }
+
+  /* ---------------- input capture ---------------- */
+  /* Добавление в таблицу происходит только по Enter — так сканер MERTECH CL-2210
+     (и любой другой в режиме "keyboard wedge") сигнализирует конец кода.
+     Никакой отправки по таймауту/паузе — это исключает добавление
+     недосканированного или случайно введённого текста. */
+  el.scanInput.addEventListener("keydown", function(e){
+    ensureAudio();
+    if(e.key === "Enter"){
+      e.preventDefault();
+      var v = el.scanInput.value;
+      el.scanInput.value = "";
+      if(v && v.trim().length > 0){
+        handleScan(v);
+      }
+    }
+  });
+
+  function refocusInput(){
+    if(document.activeElement === document.body){
+      el.scanInput.focus();
+    }
+  }
+  el.scanInput.addEventListener("blur", function(){
+    setTimeout(refocusInput, 60);
+  });
+  document.addEventListener("click", function(e){
+    var t = e.target;
+    var interactive = t.closest("button, input, .settings, a, .del-btn");
+    if(!interactive){
+      el.scanInput.focus();
+    }
+  });
+
+  el.tbody.addEventListener("click", function(e){
+    var btn = e.target.closest("[data-del]");
+    if(btn){
+      deleteRow(Number(btn.getAttribute("data-del")));
+    }
+  });
+
+  /* ---------------- toolbar ---------------- */
+  document.getElementById("btnExportXlsx").addEventListener("click", exportXlsx);
+  document.getElementById("btnExportCsv").addEventListener("click", exportCsv);
+  document.getElementById("btnCopy").addEventListener("click", copyTable);
+  document.getElementById("btnUndo").addEventListener("click", undoLast);
+  document.getElementById("btnClear").addEventListener("click", clearAll);
+
+  document.getElementById("btnFillTemplate").addEventListener("click", function(){
+    document.getElementById("templateFileInput").click();
+  });
+  document.getElementById("templateFileInput").addEventListener("change", function(e){
+    var file = e.target.files[0];
+    if(file){ processTemplateFile(file); }
+    e.target.value = "";
+  });
+
+  /* ---------------- settings ---------------- */
+  el.settingsBtn.addEventListener("click", function(){
+    el.settingsPanel.classList.toggle("show");
+    el.settingsBtn.classList.toggle("active");
+  });
+  function setSwitch(node, on){
+    node.classList.toggle("on", on);
+  }
+  el.gs1Switch.addEventListener("click", function(){
+    state.settings.checkGS1 = !state.settings.checkGS1;
+    setSwitch(el.gs1Switch, state.settings.checkGS1);
+    saveState();
+  });
+  el.soundSwitch.addEventListener("click", function(){
+    state.settings.soundEnabled = !state.settings.soundEnabled;
+    setSwitch(el.soundSwitch, state.settings.soundEnabled);
+    setSwitch(el.soundBtn, state.settings.soundEnabled);
+    el.soundBtn.classList.toggle("active", state.settings.soundEnabled);
+    saveState();
+  });
+  el.soundBtn.addEventListener("click", function(){
+    ensureAudio();
+    state.settings.soundEnabled = !state.settings.soundEnabled;
+    setSwitch(el.soundSwitch, state.settings.soundEnabled);
+    el.soundBtn.classList.toggle("active", state.settings.soundEnabled);
+    saveState();
+  });
+  el.testSuccess.addEventListener("click", function(){ ensureAudio(); beep("success"); });
+  el.testWarn.addEventListener("click", function(){ ensureAudio(); beep("warn"); speak("Код отсканирован дважды."); });
+  el.testError.addEventListener("click", function(){ ensureAudio(); beep("error"); speak("Отсканирован неправильный код."); });
+
+  /* ---------------- init ---------------- */
+  loadState(function(){
+    setSwitch(el.gs1Switch, state.settings.checkGS1);
+    setSwitch(el.soundSwitch, state.settings.soundEnabled);
+    el.soundBtn.classList.toggle("active", state.settings.soundEnabled);
+    render();
+    el.scanInput.focus();
+  });
+
+})();
+</script>
+</body>
+</html>
